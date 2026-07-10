@@ -17,7 +17,7 @@ function move(id: string): MoveSummary {
     description: "",
     methods: ["Level up"],
     sourceGenerations: [9],
-    usesTypeEffectiveness: true,
+    matchupMode: "standard",
   };
 }
 

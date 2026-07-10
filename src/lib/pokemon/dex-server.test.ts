@@ -116,7 +116,7 @@ describe("generation-aware dex data", () => {
     ]);
 
     expect(lapras?.moves.find((move) => move.id === "freezedry")).toMatchObject({
-      usesTypeEffectiveness: true,
+      matchupMode: "standard",
       effectivenessOverrides: { Water: 2 },
     });
     expect(hawlucha?.moves.find((move) => move.id === "flyingpress")).toMatchObject(
@@ -126,7 +126,42 @@ describe("generation-aware dex data", () => {
       { effectivenessOverrides: { Flying: 1 } },
     );
     expect(chansey?.moves.find((move) => move.id === "seismictoss")).toMatchObject(
-      { usesTypeEffectiveness: false },
+      { matchupMode: "type-independent" },
+    );
+  });
+
+  it("uses generation move data to preserve special-damage immunity quirks", async () => {
+    const [
+      gen1Chansey,
+      gen2Chansey,
+      gen1Rhydon,
+      gen1Gengar,
+      gen2Gengar,
+    ] = await Promise.all([
+      getPokemonMoves(1, "chansey"),
+      getPokemonMoves(2, "chansey"),
+      getPokemonMoves(1, "rhydon"),
+      getPokemonMoves(1, "gengar"),
+      getPokemonMoves(2, "gengar"),
+    ]);
+
+    for (const moveId of ["seismictoss", "counter"]) {
+      expect(
+        gen1Chansey?.moves.find((move) => move.id === moveId),
+      ).toMatchObject({ matchupMode: "type-independent" });
+      expect(
+        gen2Chansey?.moves.find((move) => move.id === moveId),
+      ).toMatchObject({ matchupMode: "immunity-only" });
+    }
+
+    expect(gen1Rhydon?.moves.find((move) => move.id === "fissure")).toMatchObject(
+      { matchupMode: "immunity-only" },
+    );
+    expect(gen1Gengar?.moves.find((move) => move.id === "nightshade")).toMatchObject(
+      { matchupMode: "type-independent" },
+    );
+    expect(gen2Gengar?.moves.find((move) => move.id === "nightshade")).toMatchObject(
+      { matchupMode: "immunity-only" },
     );
   });
 

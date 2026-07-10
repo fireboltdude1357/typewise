@@ -100,6 +100,7 @@ const mechanicsChart: TypeChartInput = {
       Ghost: 0,
     },
     Grass: { Water: 2, Ground: 2, Flying: 0.5, Grass: 0.5, Steel: 0.5 },
+    Ghost: { Normal: 0, Ghost: 2 },
   },
 };
 
@@ -547,7 +548,7 @@ describe("analyzeTeam", () => {
     });
   });
 
-  it("excludes fixed-damage and OHKO moves from coverage and STAB without treating them as status", () => {
+  it("excludes special-damage moves from coverage and STAB while retaining their type immunities", () => {
     const result = analyzeTeam(
       [
         pokemon(
@@ -561,7 +562,7 @@ describe("analyzeTeam", () => {
               type: "Fighting",
               category: "physical",
               power: null,
-              usesTypeEffectiveness: false,
+              matchupMode: "immunity-only",
             },
             {
               id: "fissure",
@@ -569,26 +570,82 @@ describe("analyzeTeam", () => {
               type: "Ground",
               category: "physical",
               power: null,
-              usesTypeEffectiveness: false,
+              matchupMode: "immunity-only",
+            },
+            {
+              id: "night-shade",
+              name: "Night Shade",
+              type: "Ghost",
+              category: "special",
+              power: null,
+              matchupMode: "immunity-only",
             },
           ],
         ),
       ],
       mechanicsChart,
+      {
+        breakerLimit: 100,
+        defensiveTypeCombinations: [
+          ["Normal"],
+          ["Ghost"],
+          ["Flying"],
+          ["Ghost", "Flying"],
+          ["Rock"],
+        ],
+      },
     );
 
     expect(result.offense.damagingMoveTypes).toEqual([]);
     expect(result.offense.coveredTypes).toEqual([]);
-    expect(result.breakers.defensiveTypeCombinations).toEqual([]);
+    expect(
+      result.breakers.defensiveTypeCombinations.map((breaker) => ({
+        types: breaker.types,
+        immuneMoveTypes: breaker.immuneMoveTypes,
+      })),
+    ).toEqual([
+      {
+        types: ["Flying", "Ghost"],
+        immuneMoveTypes: ["Ground", "Fighting"],
+      },
+      { types: ["Normal"], immuneMoveTypes: ["Ghost"] },
+      { types: ["Flying"], immuneMoveTypes: ["Ground"] },
+      { types: ["Ghost"], immuneMoveTypes: ["Fighting"] },
+    ]);
     expect(result.gaps.stab.byMember[0]).toMatchObject({
       damagingStabTypes: [],
       missingStabTypes: ["Fighting", "Ground"],
       hasDamagingStab: false,
     });
     expect(result.gaps.movesets.byMember[0]).toMatchObject({
-      damagingMoveCount: 2,
+      damagingMoveCount: 3,
       statusMoveCount: 0,
     });
+  });
+
+  it("does not invent immunities for type-independent special damage", () => {
+    const result = analyzeTeam(
+      [
+        pokemon("gen-one-ghost", "Gen I Ghost", ["Ghost"], [
+          {
+            id: "night-shade",
+            name: "Night Shade",
+            type: "Ghost",
+            category: "special",
+            power: null,
+            matchupMode: "type-independent",
+          },
+        ]),
+      ],
+      mechanicsChart,
+      {
+        defensiveTypeCombinations: [["Normal"], ["Ghost"]],
+      },
+    );
+
+    expect(result.offense.damagingMoveTypes).toEqual([]);
+    expect(result.gaps.stab.byMember[0].hasDamagingStab).toBe(false);
+    expect(result.breakers.defensiveTypeCombinations).toEqual([]);
   });
 
   it("ranks and explains attacking and defensive breaker archetypes", () => {
@@ -632,7 +689,7 @@ describe("analyzeTeam", () => {
     );
   });
 
-  it("limits defensive breakers to supplied catalog type combinations", () => {
+  it("normalizes and deduplicates supplied catalog type combinations", () => {
     const team = [
       pokemon("electric-user", "Electric User", ["Electric"], [
         {
@@ -654,7 +711,13 @@ describe("analyzeTeam", () => {
 
     const constrained = analyzeTeam(team, chart, {
       breakerLimit: 100,
-      defensiveTypeCombinations: [["Ground"], ["Water"], ["Ground", "Flying"]],
+      defensiveTypeCombinations: [
+        ["Ground"],
+        ["Water"],
+        ["Flying", "Ground"],
+        ["Ground", "Flying"],
+        ["Ground"],
+      ],
     });
     expect(
       constrained.breakers.defensiveTypeCombinations.map(

@@ -48,36 +48,49 @@ export function typeMultiplier(
  * effectiveness type is otherwise multiplied with the move's own type. The
  * per-type results are then multiplied across a dual-type defender.
  *
- * Callers decide whether a move participates in type-based analysis through
- * `usesTypeEffectiveness`; this function only evaluates its effectiveness
- * profile.
+ * `immunity-only` moves collapse every non-zero matchup to neutral, while
+ * `type-independent` moves always return neutral. This lets callers retain
+ * real immunities without treating fixed-damage moves as ordinary coverage.
  */
 export function selectedMoveMultiplier(
   chart: TypeChartInput,
   move: Pick<
     SelectedMove,
-    "type" | "secondaryEffectivenessType" | "effectivenessOverrides"
+    | "type"
+    | "matchupMode"
+    | "secondaryEffectivenessType"
+    | "effectivenessOverrides"
   >,
   defendingTypes: readonly PokemonType[],
 ): number {
-  return uniqueInOrder(defendingTypes).reduce((total, defendingType) => {
-    const override = move.effectivenessOverrides?.[defendingType];
-    if (override !== undefined) return total * override;
+  const matchupMode = move.matchupMode ?? "standard";
+  if (matchupMode === "type-independent") return NEUTRAL_MULTIPLIER;
 
-    const primaryMultiplier = singleTypeMultiplier(
-      chart,
-      move.type,
-      defendingType,
-    );
-    const secondaryMultiplier = move.secondaryEffectivenessType
-      ? singleTypeMultiplier(
-          chart,
-          move.secondaryEffectivenessType,
-          defendingType,
-        )
-      : NEUTRAL_MULTIPLIER;
-    return total * primaryMultiplier * secondaryMultiplier;
-  }, NEUTRAL_MULTIPLIER);
+  const standardMultiplier = uniqueInOrder(defendingTypes).reduce(
+    (total, defendingType) => {
+      const override = move.effectivenessOverrides?.[defendingType];
+      if (override !== undefined) return total * override;
+
+      const primaryMultiplier = singleTypeMultiplier(
+        chart,
+        move.type,
+        defendingType,
+      );
+      const secondaryMultiplier = move.secondaryEffectivenessType
+        ? singleTypeMultiplier(
+            chart,
+            move.secondaryEffectivenessType,
+            defendingType,
+          )
+        : NEUTRAL_MULTIPLIER;
+      return total * primaryMultiplier * secondaryMultiplier;
+    },
+    NEUTRAL_MULTIPLIER,
+  );
+
+  return matchupMode === "immunity-only" && standardMultiplier !== 0
+    ? NEUTRAL_MULTIPLIER
+    : standardMultiplier;
 }
 
 export function matchupOutcome(multiplier: number): MatchupOutcome {

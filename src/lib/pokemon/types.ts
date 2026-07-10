@@ -4,6 +4,11 @@ export type Generation = (typeof GENERATIONS)[number];
 
 export type MoveCategory = "Physical" | "Special" | "Status";
 
+export type MoveMatchupMode =
+  | "standard"
+  | "immunity-only"
+  | "type-independent";
+
 export type PokemonSummary = {
   id: string;
   number: number;
@@ -42,7 +47,7 @@ export type MoveSummary = {
   description: string;
   methods: LearnMethod[];
   sourceGenerations: number[];
-  usesTypeEffectiveness: boolean;
+  matchupMode: MoveMatchupMode;
   secondaryEffectivenessType?: string;
   effectivenessOverrides?: Record<string, number>;
 };

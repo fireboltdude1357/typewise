@@ -152,16 +152,24 @@ function analyzeDefense(
   return { byAttackType, sharedWeaknesses };
 }
 
-function isTypeEffectiveDamagingMove(move: SelectedMove): boolean {
-  return move.category !== "status" && move.usesTypeEffectiveness !== false;
+function isDamagingMove(move: SelectedMove): boolean {
+  return move.category !== "status";
 }
 
-function typeEffectiveDamagingMoves(
+function isStandardMatchupDamagingMove(move: SelectedMove): boolean {
+  return isDamagingMove(move) && (move.matchupMode ?? "standard") === "standard";
+}
+
+function standardMatchupDamagingMoves(
   team: readonly TeamPokemon[],
 ): SelectedMove[] {
   return team.flatMap((member) =>
-    member.moves.filter(isTypeEffectiveDamagingMove),
+    member.moves.filter(isStandardMatchupDamagingMove),
   );
+}
+
+function allDamagingMoves(team: readonly TeamPokemon[]): SelectedMove[] {
+  return team.flatMap((member) => member.moves.filter(isDamagingMove));
 }
 
 function bestSelectedMoveMultiplier(
@@ -228,7 +236,7 @@ function analyzeStab(team: readonly TeamPokemon[]): StabMemberReport[] {
   return team.map((member) => {
     const damagingTypes = new Set(
       member.moves
-        .filter(isTypeEffectiveDamagingMove)
+        .filter(isStandardMatchupDamagingMove)
         .map((move) => move.type),
     );
     const pokemonTypes = uniqueInOrder(member.types);
@@ -547,6 +555,29 @@ function assertValidDefensiveTypeCombinations(
   }
 }
 
+function normalizeDefensiveTypeCombinations(
+  combinations: readonly DefensiveTypeCombination[],
+  types: readonly PokemonType[],
+): DefensiveTypeCombination[] {
+  const typeIndex = new Map(types.map((type, index) => [type, index]));
+  const seen = new Set<string>();
+  const normalized: DefensiveTypeCombination[] = [];
+
+  for (const combination of combinations) {
+    const canonical = [...combination].sort(
+      (left, right) =>
+        (typeIndex.get(left) ?? Number.MAX_SAFE_INTEGER) -
+        (typeIndex.get(right) ?? Number.MAX_SAFE_INTEGER),
+    ) as [PokemonType] | [PokemonType, PokemonType];
+    const key = JSON.stringify(canonical);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(canonical);
+  }
+
+  return normalized;
+}
+
 function defensiveResistanceScore(
   multipliers: readonly number[],
 ): number {
@@ -560,20 +591,26 @@ function defensiveResistanceScore(
 }
 
 function defensiveBreakers(
-  coverage: OffensiveCoverageAnalysis,
   moves: readonly SelectedMove[],
   chart: TypeChartInput,
   types: readonly PokemonType[],
   options: ResolvedOptions,
 ): DefensiveTypeBreaker[] {
-  if (coverage.damagingMoveTypes.length === 0) return [];
+  const selectedMoveTypes = new Set(moves.map((move) => move.type));
+  const attackingMoveTypes = types.filter((type) => selectedMoveTypes.has(type));
+  if (attackingMoveTypes.length === 0) return [];
 
   const defendingTypeCombinations =
-    options.defensiveTypeCombinations ?? allTypeCombinations(types);
+    options.defensiveTypeCombinations === undefined
+      ? allTypeCombinations(types)
+      : normalizeDefensiveTypeCombinations(
+          options.defensiveTypeCombinations,
+          types,
+        );
 
   return defendingTypeCombinations
     .map<DefensiveTypeBreaker | null>((defendingTypes) => {
-      const matchups = coverage.damagingMoveTypes.map((attackingMoveType) => {
+      const matchups = attackingMoveTypes.map((attackingMoveType) => {
         const multiplier = bestSelectedMoveMultiplier(
           chart,
           moves,
@@ -614,7 +651,7 @@ function defensiveBreakers(
         immuneMoveTypes,
         neutralMoveTypes,
         matchups,
-        explanation: `${defendingTypes.join("/")} resists or nullifies ${blockedMoveTypes.length} of ${coverage.damagingMoveTypes.length} selected attacking types (${formatTypeList(blockedMoveTypes)}), with no selected type hitting it super effectively.`,
+        explanation: `${defendingTypes.join("/")} resists or nullifies ${blockedMoveTypes.length} of ${attackingMoveTypes.length} selected attacking types (${formatTypeList(blockedMoveTypes)}), with no selected type hitting it super effectively.`,
       };
     })
     .filter((breaker): breaker is DefensiveTypeBreaker => breaker !== null)
@@ -637,7 +674,6 @@ function defensiveBreakers(
 
 function analyzeBreakers(
   defense: DefensiveAnalysis,
-  coverage: OffensiveCoverageAnalysis,
   moves: readonly SelectedMove[],
   teamSize: number,
   chart: TypeChartInput,
@@ -653,7 +689,6 @@ function analyzeBreakers(
       typeIndex,
     ),
     defensiveTypeCombinations: defensiveBreakers(
-      coverage,
       moves,
       chart,
       types,
@@ -680,8 +715,9 @@ export function analyzeTeam(
     types,
   );
   const defense = analyzeDefense(team, chart, types);
-  const moves = typeEffectiveDamagingMoves(team);
-  const offense = analyzeOffense(moves, chart, types);
+  const standardMoves = standardMatchupDamagingMoves(team);
+  const offense = analyzeOffense(standardMoves, chart, types);
+  const damagingMoves = allDamagingMoves(team);
 
   return {
     generation: chart.generation,
@@ -691,8 +727,7 @@ export function analyzeTeam(
     gaps: analyzeGaps(team, resolvedOptions),
     breakers: analyzeBreakers(
       defense,
-      offense,
-      moves,
+      damagingMoves,
       team.length,
       chart,
       types,

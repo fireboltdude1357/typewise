@@ -4,6 +4,19 @@ export type PokemonType = string;
 export type MoveCategory = "physical" | "special" | "status";
 
 /**
+ * How a damaging move interacts with the type chart.
+ *
+ * - `standard` uses weaknesses, resistances, and immunities.
+ * - `immunity-only` is neutral whenever it can hit, but still fails into a
+ *   type immunity (fixed-damage and similar special-damage moves).
+ * - `type-independent` ignores the type chart entirely.
+ */
+export type MoveMatchupMode =
+  | "standard"
+  | "immunity-only"
+  | "type-independent";
+
+/**
  * Utility labels are deliberately extensible. The built-in labels cover common
  * team-building jobs, while callers can supply generation- or format-specific
  * labels through `AnalysisOptions.utilityTargets`.
@@ -34,11 +47,8 @@ export interface SelectedMove {
   accuracy?: number | null;
   priority?: number;
   utilityRoles?: readonly UtilityRole[];
-  /**
-   * Whether the move uses the type chart when it deals damage. This defaults
-   * to `true`; fixed-damage, OHKO, and counter-style moves set it to `false`.
-   */
-  usesTypeEffectiveness?: boolean;
+  /** Defaults to `standard` when omitted. */
+  matchupMode?: MoveMatchupMode;
   /**
    * A second attacking type whose effectiveness is multiplied with `type`.
    * Flying Press, for example, is Fighting type with Flying effectiveness.

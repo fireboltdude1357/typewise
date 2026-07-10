@@ -181,6 +181,15 @@ function moveMethods(sources: string[], generation: Generation): LearnMethod[] {
   });
 }
 
+function ignoresImmunityForType(
+  ignoreImmunity: boolean | Readonly<Record<string, boolean | undefined>> | undefined,
+  type: string,
+): boolean {
+  if (ignoreImmunity === true) return true;
+  if (!ignoreImmunity) return false;
+  return ignoreImmunity[type] === true;
+}
+
 function serializeMove(
   generation: Generation,
   moveId: string,
@@ -225,10 +234,18 @@ function serializeMove(
     resolvedType = "Dark";
   }
 
-  const usesTypeEffectiveness =
-    !move.ohko &&
-    (move.damage === undefined || move.damage === null || move.damage === false) &&
-    !NON_STANDARD_DAMAGE_MOVES.has(move.id);
+  const hasSpecialDamageRule =
+    Boolean(move.ohko) ||
+    (move.damage !== undefined && move.damage !== null && move.damage !== false) ||
+    NON_STANDARD_DAMAGE_MOVES.has(move.id);
+  const matchupMode: MoveSummary["matchupMode"] =
+    move.category === "Status" ||
+    (hasSpecialDamageRule &&
+      ignoresImmunityForType(move.ignoreImmunity, resolvedType))
+      ? "type-independent"
+      : hasSpecialDamageRule
+        ? "immunity-only"
+        : "standard";
 
   return {
     id: hiddenPowerType ? `hiddenpower${toID(hiddenPowerType)}` : move.id,
@@ -249,7 +266,7 @@ function serializeMove(
           .filter((value): value is number => value !== null),
       ),
     ].sort((a, b) => b - a),
-    usesTypeEffectiveness,
+    matchupMode,
     ...(move.id === "flyingpress"
       ? { secondaryEffectivenessType: "Flying" }
       : {}),

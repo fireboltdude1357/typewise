@@ -105,7 +105,7 @@ function toAnalysisMove(move: MoveSummary, generation: number): SelectedMove {
     accuracy: move.accuracy,
     priority: move.priority,
     utilityRoles: utilityRoles(move, generation),
-    usesTypeEffectiveness: move.usesTypeEffectiveness,
+    matchupMode: move.matchupMode,
     secondaryEffectivenessType: move.secondaryEffectivenessType,
     effectivenessOverrides: move.effectivenessOverrides,
   };
