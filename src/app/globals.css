@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4f2ec;
+  --foreground: #191816;
 }
 
 @theme inline {
@@ -12,15 +12,125 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+  color-scheme: light;
+  scroll-behavior: smooth;
+  overflow-x: clip;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button:not(:disabled),
+select:not(:disabled) {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 3px solid #2f63d8 !important;
+  outline-offset: 2px !important;
+}
+
+::selection {
+  background: #ef5b4c;
+  color: white;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: rgb(25 24 22 / 42%);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.generation-gate {
+  background:
+    radial-gradient(circle at 10% 15%, rgb(239 91 76 / 12%), transparent 25rem),
+    radial-gradient(circle at 90% 80%, rgb(85 113 215 / 9%), transparent 28rem),
+    #e9e4d8;
+}
+
+.generation-card::after {
+  background: radial-gradient(circle, rgb(25 24 22 / 6%) 0 1px, transparent 1.5px);
+  background-size: 8px 8px;
+  content: "";
+  inset: auto -2rem -2rem auto;
+  height: 7rem;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 180ms ease;
+  width: 7rem;
+}
+
+.generation-card:hover::after {
+  opacity: 1;
+}
+
+.pokeball-mark {
+  background: linear-gradient(to bottom, #ef5b4c 0 47%, #191816 47% 56%, #fff 56% 100%);
+  border: 2px solid #191816;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
+  display: inline-block;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.pokeball-mark::after {
+  background: #f8c537;
+  border: 2px solid #191816;
+  border-radius: 999px;
+  content: "";
+  height: 31%;
+  left: 50%;
+  position: absolute;
+  top: 51.5%;
+  transform: translate(-50%, -50%);
+  width: 31%;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
