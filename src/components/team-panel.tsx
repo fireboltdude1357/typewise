@@ -60,6 +60,7 @@ export function TeamPanel({
                   </span>
                   <PokemonImage
                     src={slot.pokemon.sprite}
+                    fallbackSrcs={slot.pokemon.spriteFallbacks}
                     alt={slot.pokemon.name}
                     className="h-14 w-14"
                   />

@@ -1,6 +1,8 @@
 export const GENERATIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+export const CATALOG_SCOPES = ["national", "core"] as const;
 
 export type Generation = (typeof GENERATIONS)[number];
+export type CatalogScope = (typeof CATALOG_SCOPES)[number];
 
 export type MoveCategory = "Physical" | "Special" | "Status";
 
@@ -18,6 +20,7 @@ export type PokemonSummary = {
   introducedIn: number;
   types: string[];
   sprite: string;
+  spriteFallbacks: string[];
   spriteWidth: number;
   spriteHeight: number;
   baseStatTotal: number;
@@ -31,6 +34,7 @@ export type LearnMethod =
   | "Event"
   | "Transfer"
   | "Special"
+  | "Sketch"
   | "Virtual Console"
   | "Let's Go transfer";
 
@@ -56,6 +60,7 @@ export type TypeChart = Record<string, Record<string, number>>;
 
 export type DexCatalogResponse = {
   generation: Generation;
+  scope: CatalogScope;
   generationLabel: string;
   scopeNote: string;
   pokemon: PokemonSummary[];
@@ -65,6 +70,7 @@ export type DexCatalogResponse = {
 
 export type MoveListResponse = {
   generation: Generation;
+  scope: CatalogScope;
   pokemonId: string;
   pokemonName: string;
   scopeNote: string;
@@ -79,9 +85,14 @@ export type TeamSlot = {
 export type StoredTeam = {
   name: string;
   generation: Generation;
+  scope: CatalogScope;
   slots: TeamSlot[];
 };
 
 export function isGeneration(value: number): value is Generation {
   return GENERATIONS.includes(value as Generation);
+}
+
+export function isCatalogScope(value: string): value is CatalogScope {
+  return CATALOG_SCOPES.includes(value as CatalogScope);
 }

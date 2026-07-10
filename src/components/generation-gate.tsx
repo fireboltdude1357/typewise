@@ -54,9 +54,9 @@ export function GenerationGate({
                 </h2>
               </div>
               <span className="hidden text-right text-xs leading-5 text-black/40 xl:block">
-                Main-series learnsets
+                Every official roster
                 <br />
-                combined by generation
+                with core-game provenance
               </span>
             </div>
 
@@ -110,4 +110,3 @@ export function Brand({ compact = false }: { compact?: boolean }) {
     </div>
   );
 }
-

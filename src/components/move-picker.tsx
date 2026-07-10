@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import type {
+  CatalogScope,
   Generation,
   LearnMethod,
   MoveListResponse,
@@ -33,17 +34,20 @@ const METHODS: LearnMethod[] = [
   "Event",
   "Transfer",
   "Special",
+  "Sketch",
   "Virtual Console",
   "Let's Go transfer",
 ];
 
 export function MovePicker({
   generation,
+  scope,
   slot,
   onChange,
   onClose,
 }: {
   generation: Generation;
+  scope: CatalogScope;
   slot: TeamSlot;
   onChange: (moves: MoveSummary[]) => void;
   onClose: () => void;
@@ -61,7 +65,7 @@ export function MovePicker({
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
-      const cacheKey = `${generation}:${slot.pokemon.id}`;
+      const cacheKey = `${generation}:${scope}:${slot.pokemon.id}`;
       const cached = moveCache.get(cacheKey);
       if (cached) {
         setData(cached);
@@ -74,7 +78,7 @@ export function MovePicker({
       setError(null);
       try {
         const response = await fetch(
-          `/api/dex/${generation}/${encodeURIComponent(slot.pokemon.id)}/moves`,
+          `/api/dex/${generation}/${encodeURIComponent(slot.pokemon.id)}/moves?scope=${scope}`,
           { signal },
         );
         const body = (await response.json()) as MoveListResponse & { error?: string };
@@ -94,7 +98,7 @@ export function MovePicker({
         setLoading(false);
       }
     },
-    [generation, slot.pokemon.id],
+    [generation, scope, slot.pokemon.id],
   );
 
   useEffect(() => {
@@ -198,6 +202,7 @@ export function MovePicker({
               <span className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-white/95 lg:h-32 lg:w-full">
                 <PokemonImage
                   src={slot.pokemon.sprite}
+                  fallbackSrcs={slot.pokemon.spriteFallbacks}
                   alt={slot.pokemon.name}
                   className="h-20 w-20 lg:h-28 lg:w-28"
                 />

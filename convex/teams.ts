@@ -8,6 +8,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import {
+  catalogScopeValidator,
   generationValidator,
   teamSlotValidator,
 } from "./schema";
@@ -165,6 +166,7 @@ export const create = mutation({
   args: {
     name: v.string(),
     generation: generationValidator,
+    scope: v.optional(catalogScopeValidator),
     slots: v.array(teamSlotValidator),
   },
   handler: async (ctx, args) => {
@@ -184,6 +186,7 @@ export const create = mutation({
       ownerId,
       name: normalizeTeamName(args.name),
       generation: args.generation,
+      scope: args.scope ?? "national",
       slots: normalizeSlots(args.slots),
       createdAt: now,
       updatedAt: now,
@@ -196,9 +199,10 @@ export const update = mutation({
     teamId: v.id("savedTeams"),
     name: v.optional(v.string()),
     generation: v.optional(generationValidator),
+    scope: v.optional(catalogScopeValidator),
     slots: v.optional(v.array(teamSlotValidator)),
   },
-  handler: async (ctx, { teamId, name, generation, slots }) => {
+  handler: async (ctx, { teamId, name, generation, scope, slots }) => {
     const ownerId = await requireUserId(ctx);
     const team = await getOwnedTeam(ctx, teamId, ownerId);
 
@@ -209,13 +213,19 @@ export const update = mutation({
       });
     }
 
-    if (name === undefined && generation === undefined && slots === undefined) {
+    if (
+      name === undefined &&
+      generation === undefined &&
+      scope === undefined &&
+      slots === undefined
+    ) {
       invalidArgument("Provide at least one team field to update.");
     }
 
     await ctx.db.patch(teamId, {
       ...(name === undefined ? {} : { name: normalizeTeamName(name) }),
       ...(generation === undefined ? {} : { generation }),
+      ...(scope === undefined ? {} : { scope }),
       ...(slots === undefined ? {} : { slots: normalizeSlots(slots) }),
       updatedAt: Date.now(),
     });

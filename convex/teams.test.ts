@@ -11,6 +11,7 @@ const modules = import.meta.glob(["./**/*.ts", "./**/*.js", "!./**/*.test.ts"]);
 const validTeam = {
   name: "Kanto core",
   generation: 1 as const,
+  scope: "national" as const,
   slots: [
     {
       pokemonId: "pikachu",
@@ -44,6 +45,22 @@ describe("saved team authorization and validation", () => {
     ).rejects.toThrow();
     await expect(bob.mutation(api.teams.remove, { teamId })).rejects.toThrow();
     expect(await alice.query(api.teams.get, { teamId })).not.toBeNull();
+  });
+
+  it("defaults legacy clients without a scope to National", async () => {
+    const t = convexTest(schema, modules);
+    const user = t.withIdentity({ subject: "user_legacy", issuer: "test" });
+    const legacyTeam = {
+      name: validTeam.name,
+      generation: validTeam.generation,
+      slots: validTeam.slots,
+    };
+
+    const teamId = await user.mutation(api.teams.create, legacyTeam);
+
+    expect(await user.query(api.teams.get, { teamId })).toMatchObject({
+      scope: "national",
+    });
   });
 
   it("canonicalizes IDs and rejects duplicate forms or move variants", async () => {

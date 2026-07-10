@@ -16,7 +16,7 @@ describe("generation-aware dex data", () => {
     gen6 = getDexCatalog(6);
   });
 
-  it("returns complete standard catalogs for historical generations", () => {
+  it("returns complete National catalogs for historical generations", () => {
     expect(gen1.pokemon).toHaveLength(151);
     expect(gen1.pokemon[0]).toMatchObject({
       id: "bulbasaur",
@@ -25,6 +25,55 @@ describe("generation-aware dex data", () => {
     });
     expect(gen4.pokemon.some((pokemon) => pokemon.id === "garchomp")).toBe(true);
     expect(gen4.pokemon.some((pokemon) => pokemon.id === "sylveon")).toBe(false);
+  });
+
+  it("locks the exhaustive National and core roster counts", () => {
+    const nationalCounts = [151, 251, 392, 526, 695, 835, 995, 1183, 1379];
+    const nationalSpeciesCounts = [151, 251, 386, 493, 649, 721, 809, 905, 1025];
+    const coreCounts = [151, 251, 392, 526, 694, 834, 988, 1032, 1103];
+    const coreSpeciesCounts = [151, 251, 386, 493, 649, 721, 809, 845, 842];
+
+    for (const generation of [1, 2, 3, 4, 5, 6, 7, 8, 9] as const) {
+      const national = getDexCatalog(generation, "national");
+      const core = getDexCatalog(generation, "core");
+      const index = generation - 1;
+
+      expect(national.pokemon).toHaveLength(nationalCounts[index]);
+      expect(new Set(national.pokemon.map((pokemon) => pokemon.number)).size).toBe(
+        nationalSpeciesCounts[index],
+      );
+      expect(core.pokemon).toHaveLength(coreCounts[index]);
+      expect(new Set(core.pokemon.map((pokemon) => pokemon.number)).size).toBe(
+        coreSpeciesCounts[index],
+      );
+    }
+  });
+
+  it("unions each generation's supported core-title rosters", () => {
+    const gen7Core = getDexCatalog(7, "core");
+    const gen8Core = getDexCatalog(8, "core");
+    const gen8National = getDexCatalog(8, "national");
+    const gen9Core = getDexCatalog(9, "core");
+
+    expect(gen7Core.pokemon.some((pokemon) => pokemon.id === "meltan")).toBe(true);
+    expect(gen8Core.pokemon.some((pokemon) => pokemon.id === "unown")).toBe(true);
+    expect(gen8Core.pokemon.some((pokemon) => pokemon.id === "ursaluna")).toBe(true);
+    expect(gen8Core.pokemon.some((pokemon) => pokemon.id === "charizardgmax")).toBe(
+      true,
+    );
+    expect(gen8Core.pokemon.some((pokemon) => pokemon.id === "urshifugmax")).toBe(
+      true,
+    );
+    expect(gen8Core.pokemon.some((pokemon) => pokemon.id === "snivy")).toBe(false);
+    expect(gen8National.pokemon.some((pokemon) => pokemon.id === "snivy")).toBe(
+      true,
+    );
+    expect(gen9Core.pokemon.some((pokemon) => pokemon.id === "raichumegax")).toBe(
+      true,
+    );
+    expect(
+      gen9Core.pokemon.some((pokemon) => pokemon.id === "garchompmegaz"),
+    ).toBe(true);
   });
 
   it("keeps every generation catalog internally consistent", () => {
@@ -47,6 +96,55 @@ describe("generation-aware dex data", () => {
       expect(Object.keys(catalog.typeChart)).toEqual(catalog.types);
     }
   });
+
+  it(
+    "provides a nonempty, internally valid move list for every scoped entry",
+    async () => {
+      const problems: string[] = [];
+
+      for (const scope of ["national", "core"] as const) {
+        for (const generation of [1, 2, 3, 4, 5, 6, 7, 8, 9] as const) {
+          const catalog = getDexCatalog(generation, scope);
+          for (let start = 0; start < catalog.pokemon.length; start += 50) {
+            const batch = catalog.pokemon.slice(start, start + 50);
+            const responses = await Promise.all(
+              batch.map((pokemon) =>
+                getPokemonMoves(generation, pokemon.id, scope),
+              ),
+            );
+
+            for (const [index, response] of responses.entries()) {
+              const pokemon = batch[index];
+              const label = `${scope} Gen ${generation} ${pokemon.id}`;
+              if (!response || response.moves.length === 0) {
+                problems.push(`${label}: empty move list`);
+                continue;
+              }
+              const moveIds = new Set(response.moves.map((move) => move.id));
+              if (moveIds.size !== response.moves.length) {
+                problems.push(`${label}: duplicate moves`);
+              }
+              for (const move of response.moves) {
+                if (move.methods.length === 0) {
+                  problems.push(`${label} ${move.id}: no learn method`);
+                }
+                if (
+                  move.sourceGenerations.some(
+                    (sourceGeneration) => sourceGeneration > generation,
+                  )
+                ) {
+                  problems.push(`${label} ${move.id}: future source`);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      expect(problems).toEqual([]);
+    },
+    120_000,
+  );
 
   it("uses the selected generation's available types and type chart", () => {
     expect(gen1.types).not.toContain("Dark");
@@ -83,8 +181,42 @@ describe("generation-aware dex data", () => {
     );
   });
 
-  it("rejects Pokémon that are not standard in a generation", async () => {
+  it("rejects Pokémon that are not in the requested generation or scope", async () => {
     await expect(getPokemonMoves(1, "garchomp")).resolves.toBeNull();
+    await expect(getPokemonMoves(8, "snivy", "core")).resolves.toBeNull();
+    await expect(getPokemonMoves(8, "snivy", "national")).resolves.not.toBeNull();
+  });
+
+  it("keeps battle-focused Champions sources in National scope only", async () => {
+    const [nationalAbsol, coreAbsol] = await Promise.all([
+      getPokemonMoves(9, "absol", "national"),
+      getPokemonMoves(9, "absol", "core"),
+    ]);
+
+    expect(nationalAbsol?.moves.some((move) => move.id === "trailblaze")).toBe(
+      true,
+    );
+    expect(coreAbsol?.moves.some((move) => move.id === "trailblaze")).toBe(false);
+  });
+
+  it("does not leak National transfers into a core-title-only species", async () => {
+    const [coreUrsaluna, nationalUrsaluna] = await Promise.all([
+      getPokemonMoves(8, "ursaluna", "core"),
+      getPokemonMoves(8, "ursaluna", "national"),
+    ]);
+
+    expect(coreUrsaluna?.moves).toHaveLength(23);
+    expect(coreUrsaluna?.moves.some((move) => move.id === "headlongrush")).toBe(
+      true,
+    );
+    expect(
+      coreUrsaluna?.moves.some((move) =>
+        ["attract", "captivate", "confide", "cut"].includes(move.id),
+      ),
+    ).toBe(false);
+    expect(
+      nationalUrsaluna?.moves.some((move) => move.id === "attract"),
+    ).toBe(true);
   });
 
   it("does not leak a base regional form's learnset into its variant", async () => {
@@ -104,6 +236,75 @@ describe("generation-aware dex data", () => {
     expect(pumpkabooSmall?.moves.length).toBeGreaterThan(50);
     expect(squawkabillyBlue?.moves.some((move) => move.id === "bravebird")).toBe(
       true,
+    );
+  });
+
+  it("applies validator-proven form additions and removals", async () => {
+    const [
+      kyuremBlack,
+      gourgeistSmall,
+      necrozmaUltra,
+      battleBondGreninja,
+      fancyVivillon,
+      pokeballVivillon,
+      rockruff,
+      alolanRaichu,
+      bloodmoonUrsaluna,
+    ] = await Promise.all([
+      getPokemonMoves(5, "kyuremblack"),
+      getPokemonMoves(6, "gourgeistsmall"),
+      getPokemonMoves(7, "necrozmaultra"),
+      getPokemonMoves(7, "greninjabond"),
+      getPokemonMoves(6, "vivillonfancy"),
+      getPokemonMoves(6, "vivillonpokeball"),
+      getPokemonMoves(7, "rockruff"),
+      getPokemonMoves(7, "raichualola"),
+      getPokemonMoves(9, "ursalunabloodmoon"),
+    ]);
+
+    expect(
+      kyuremBlack?.moves.some((move) =>
+        ["glaciate", "scaryface"].includes(move.id),
+      ),
+    ).toBe(false);
+    expect(gourgeistSmall?.moves).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "bestow" }),
+        expect.objectContaining({ id: "destinybond" }),
+        expect.objectContaining({ id: "disable" }),
+      ]),
+    );
+    expect(necrozmaUltra?.moves.some((move) => move.id === "photongeyser")).toBe(
+      true,
+    );
+    expect(
+      battleBondGreninja?.moves.some((move) => move.id === "toxicspikes"),
+    ).toBe(false);
+    expect(
+      battleBondGreninja?.moves.some((move) => move.id === "watershuriken"),
+    ).toBe(true);
+    expect(
+      fancyVivillon?.moves.some((move) =>
+        ["harden", "irondefense", "ragepowder", "stringshot", "tackle"].includes(
+          move.id,
+        ),
+      ),
+    ).toBe(false);
+    expect(pokeballVivillon?.moves.some((move) => move.id === "ragepowder")).toBe(
+      false,
+    );
+    expect(pokeballVivillon?.moves.some((move) => move.id === "hurricane")).toBe(
+      true,
+    );
+    expect(rockruff?.moves.some((move) => move.id === "happyhour")).toBe(false);
+    expect(alolanRaichu?.moves.some((move) => move.id === "doublekick")).toBe(
+      false,
+    );
+    expect(bloodmoonUrsaluna?.moves).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "bellydrum" }),
+        expect.objectContaining({ id: "yawn" }),
+      ]),
     );
   });
 
@@ -176,6 +377,59 @@ describe("generation-aware dex data", () => {
     );
     expect(tauros?.moves.find((move) => move.id === "ragingbull")?.type).toBe(
       "Fire",
+    );
+  });
+
+  it("expands Smeargle's generation-specific Sketch pool", async () => {
+    const [gen2Smeargle, gen3Smeargle, gen9Smeargle] = await Promise.all([
+      getPokemonMoves(2, "smeargle"),
+      getPokemonMoves(3, "smeargle"),
+      getPokemonMoves(9, "smeargle"),
+    ]);
+
+    expect(gen2Smeargle?.moves.find((move) => move.id === "aeroblast")).toMatchObject({
+      methods: ["Sketch"],
+    });
+    expect(gen3Smeargle?.moves.find((move) => move.id === "spore")).toMatchObject({
+      methods: ["Sketch"],
+    });
+    expect(gen9Smeargle?.moves.find((move) => move.id === "spacialrend")).toMatchObject({
+      methods: ["Sketch"],
+    });
+    expect(gen9Smeargle?.moves.some((move) => move.id === "revivalblessing")).toBe(
+      false,
+    );
+    expect(gen9Smeargle?.moves.length).toBeGreaterThan(650);
+  });
+
+  it("constrains event-locked Hidden Power variants", async () => {
+    const [gen6Xerneas, gen7Magearna, battleBondGreninja] = await Promise.all([
+      getPokemonMoves(6, "xerneas"),
+      getPokemonMoves(7, "magearna"),
+      getPokemonMoves(7, "greninjabond"),
+    ]);
+
+    expect(gen6Xerneas?.moves.some((move) => move.id === "hiddenpowerfighting"))
+      .toBe(false);
+    expect(gen7Magearna?.moves.some((move) => move.id === "hiddenpowerfighting"))
+      .toBe(false);
+    expect(
+      battleBondGreninja?.moves
+        .filter((move) => move.id.startsWith("hiddenpower"))
+        .map((move) => move.id),
+    ).toEqual(["hiddenpowerghost"]);
+  });
+
+  it("provides working base-species image fallbacks for form sprites", () => {
+    const totem = getDexCatalog(7).pokemon.find(
+      (pokemon) => pokemon.id === "raticatealolatotem",
+    );
+
+    expect(totem?.spriteFallbacks).toContain(
+      "https://play.pokemonshowdown.com/sprites/gen5/raticate-alola.png",
+    );
+    expect(totem?.spriteFallbacks).toContain(
+      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/20.png",
     );
   });
 });

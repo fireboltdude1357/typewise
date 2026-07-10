@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
+  CatalogScope,
   DexCatalogResponse,
   Generation,
   MoveListResponse,
@@ -19,7 +20,7 @@ import type {
   PokemonSummary,
   TeamSlot,
 } from "@/lib/pokemon/types";
-import { isGeneration } from "@/lib/pokemon/types";
+import { isCatalogScope, isGeneration } from "@/lib/pokemon/types";
 import { AnalysisPanel } from "./analysis-panel";
 import { AppHeader } from "./app-header";
 import { GenerationGate } from "./generation-gate";
@@ -36,20 +37,29 @@ const LOCAL_DRAFT_KEY = "typewise.team.v1";
 
 type LocalDraft = {
   generation: Generation;
+  scope: CatalogScope;
   name: string;
   slots: Array<{ pokemonId: string; moveIds: string[] }>;
 };
 
-async function fetchCatalog(generation: Generation, signal?: AbortSignal) {
-  const response = await fetch(`/api/dex/${generation}`, { signal });
+async function fetchCatalog(
+  generation: Generation,
+  scope: CatalogScope,
+  signal?: AbortSignal,
+) {
+  const response = await fetch(`/api/dex/${generation}?scope=${scope}`, { signal });
   const body = (await response.json()) as DexCatalogResponse & { error?: string };
   if (!response.ok) throw new Error(body.error || "The Pokédex could not be loaded.");
   return body;
 }
 
-async function fetchMoves(generation: Generation, pokemonId: string) {
+async function fetchMoves(
+  generation: Generation,
+  scope: CatalogScope,
+  pokemonId: string,
+) {
   const response = await fetch(
-    `/api/dex/${generation}/${encodeURIComponent(pokemonId)}/moves`,
+    `/api/dex/${generation}/${encodeURIComponent(pokemonId)}/moves?scope=${scope}`,
   );
   const body = (await response.json()) as MoveListResponse & { error?: string };
   if (!response.ok) throw new Error(body.error || "A saved moveset could not be loaded.");
@@ -58,6 +68,7 @@ async function fetchMoves(generation: Generation, pokemonId: string) {
 
 async function rehydrateDraftSlots(
   generation: Generation,
+  scope: CatalogScope,
   catalog: DexCatalogResponse,
   slots: LocalDraft["slots"],
 ) {
@@ -71,19 +82,15 @@ async function rehydrateDraftSlots(
       if (!pokemon) return null;
       if (slot.moveIds.length === 0) return { pokemon, moves: [] } satisfies TeamSlot;
 
-      try {
-        const legalMoves = await fetchMoves(generation, pokemon.id);
-        const movesById = new Map(legalMoves.map((move) => [move.id, move]));
-        return {
-          pokemon,
-          moves: slot.moveIds
-            .map((moveId) => movesById.get(moveId))
-            .filter((move): move is MoveSummary => move !== undefined)
-            .slice(0, 4),
-        } satisfies TeamSlot;
-      } catch {
-        return { pokemon, moves: [] } satisfies TeamSlot;
-      }
+      const legalMoves = await fetchMoves(generation, scope, pokemon.id);
+      const movesById = new Map(legalMoves.map((move) => [move.id, move]));
+      return {
+        pokemon,
+        moves: slot.moveIds
+          .map((moveId) => movesById.get(moveId))
+          .filter((move): move is MoveSummary => move !== undefined)
+          .slice(0, 4),
+      } satisfies TeamSlot;
     }),
   );
 
@@ -93,6 +100,7 @@ async function rehydrateDraftSlots(
 export function TeamBuilderApp() {
   const [hydrated, setHydrated] = useState(false);
   const [generation, setGeneration] = useState<Generation | null>(null);
+  const [scope, setScope] = useState<CatalogScope>("national");
   const [catalog, setCatalog] = useState<DexCatalogResponse | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
@@ -103,6 +111,7 @@ export function TeamBuilderApp() {
   const [activeSavedTeamId, setActiveSavedTeamId] =
     useState<Id<"savedTeams"> | null>(null);
   const pendingLocalDraft = useRef<LocalDraft | null>(null);
+  const requestEpoch = useRef(0);
 
   /* eslint-disable react-hooks/set-state-in-effect -- Hydrating a browser-only local draft after SSR intentionally updates client state. */
   useEffect(() => {
@@ -147,6 +156,10 @@ export function TeamBuilderApp() {
               : [];
           pendingLocalDraft.current = {
             generation: draft.generation,
+            scope:
+              typeof draft.scope === "string" && isCatalogScope(draft.scope)
+                ? draft.scope
+                : "national",
             name:
               typeof draft.name === "string" && draft.name.trim()
                 ? draft.name.slice(0, 80)
@@ -154,6 +167,7 @@ export function TeamBuilderApp() {
             slots: compactSlots.slice(0, 6),
           };
           setGeneration(draft.generation);
+          setScope(pendingLocalDraft.current.scope);
           setTeamName(pendingLocalDraft.current.name);
         }
       }
@@ -171,6 +185,7 @@ export function TeamBuilderApp() {
     if (pendingLocalDraft.current) return;
     const draft: LocalDraft = {
       generation,
+      scope,
       name: teamName,
       slots: team.map((slot) => ({
         pokemonId: slot.pokemon.id,
@@ -182,21 +197,34 @@ export function TeamBuilderApp() {
     } catch {
       // A private browser profile or full storage quota should not break the app.
     }
-  }, [activeSavedTeamId, generation, hydrated, team, teamName]);
+  }, [activeSavedTeamId, generation, hydrated, scope, team, teamName]);
 
   useEffect(() => {
     if (generation === null) return;
     const controller = new AbortController();
-    fetchCatalog(generation, controller.signal)
+    const requestId = ++requestEpoch.current;
+    fetchCatalog(generation, scope, controller.signal)
       .then(async (nextCatalog) => {
+        if (
+          controller.signal.aborted ||
+          requestId !== requestEpoch.current
+        ) {
+          return;
+        }
         const pending = pendingLocalDraft.current;
-        if (pending?.generation === generation) {
+        if (pending?.generation === generation && pending.scope === scope) {
           const restoredTeam = await rehydrateDraftSlots(
             generation,
+            scope,
             nextCatalog,
             pending.slots,
           );
-          if (controller.signal.aborted) return;
+          if (
+            controller.signal.aborted ||
+            requestId !== requestEpoch.current
+          ) {
+            return;
+          }
           pendingLocalDraft.current = null;
           setTeam(restoredTeam);
         } else {
@@ -213,23 +241,35 @@ export function TeamBuilderApp() {
               .filter((slot): slot is TeamSlot => slot !== null),
           );
         }
+        if (requestId !== requestEpoch.current) return;
         setCatalog(nextCatalog);
       })
       .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (
+          requestId !== requestEpoch.current ||
+          (error instanceof DOMException && error.name === "AbortError")
+        ) {
+          return;
+        }
         setCatalogError(
           error instanceof Error ? error.message : "The Pokédex could not be loaded.",
         );
       })
       .finally(() => {
-        if (!controller.signal.aborted) setLoadingCatalog(false);
+        if (
+          !controller.signal.aborted &&
+          requestId === requestEpoch.current
+        ) {
+          setLoadingCatalog(false);
+        }
       });
 
     return () => controller.abort();
-  }, [generation, retryKey]);
+  }, [generation, retryKey, scope]);
 
   const chooseGeneration = useCallback(
     (nextGeneration: Generation) => {
+      requestEpoch.current += 1;
       pendingLocalDraft.current = null;
       if (generation !== null && nextGeneration !== generation) {
         setTeam([]);
@@ -239,8 +279,32 @@ export function TeamBuilderApp() {
       setGeneration(nextGeneration);
       setCatalog(null);
       setCatalogError(null);
+      setLoadingCatalog(false);
     },
     [generation],
+  );
+
+  const changeScope = useCallback(
+    (nextScope: CatalogScope) => {
+      if (nextScope === scope) return;
+      if (
+        team.length > 0 &&
+        !window.confirm(
+          "Changing roster scope clears this lineup because Pokémon and moves may not exist in the new scope. Continue?",
+        )
+      ) {
+        return;
+      }
+      requestEpoch.current += 1;
+      setScope(nextScope);
+      setCatalog(null);
+      setCatalogError(null);
+      setLoadingCatalog(false);
+      setTeam([]);
+      setActiveSlot(null);
+      pendingLocalDraft.current = null;
+    },
+    [scope, team.length],
   );
 
   const changeGeneration = useCallback(() => {
@@ -252,8 +316,10 @@ export function TeamBuilderApp() {
     ) {
       return;
     }
+    requestEpoch.current += 1;
     setGeneration(null);
     setCatalog(null);
+    setLoadingCatalog(false);
     setTeam([]);
     setTeamName("Untitled team");
     setActiveSavedTeamId(null);
@@ -263,6 +329,9 @@ export function TeamBuilderApp() {
 
   const resetTeam = useCallback(() => {
     if (!window.confirm("Clear all Pokémon and moves from this draft?")) return;
+    requestEpoch.current += 1;
+    setLoadingCatalog(false);
+    setRetryKey((key) => key + 1);
     setTeam([]);
     setTeamName("Untitled team");
     setActiveSlot(null);
@@ -273,6 +342,9 @@ export function TeamBuilderApp() {
   const closeMovePicker = useCallback(() => setActiveSlot(null), []);
 
   const startNewDraft = useCallback(() => {
+    requestEpoch.current += 1;
+    setLoadingCatalog(false);
+    setRetryKey((key) => key + 1);
     setTeam([]);
     setTeamName("Untitled team");
     setActiveSlot(null);
@@ -311,20 +383,28 @@ export function TeamBuilderApp() {
   }
 
   async function loadSavedTeam(saved: SavedTeamDocument) {
+    const requestId = ++requestEpoch.current;
+    const pendingBeforeLoad = pendingLocalDraft.current;
+    pendingLocalDraft.current = null;
     setLoadingCatalog(true);
     setCatalogError(null);
     try {
+      const savedScope = saved.scope ?? "national";
       const nextCatalog =
-        catalog?.generation === saved.generation
+        catalog?.generation === saved.generation && catalog.scope === savedScope
           ? catalog
-          : await fetchCatalog(saved.generation);
+          : await fetchCatalog(saved.generation, savedScope);
       const nextSlots = await Promise.all(
         saved.slots.slice(0, 6).map(async (compactSlot) => {
           const pokemon = nextCatalog.pokemon.find(
             (candidate) => candidate.id === compactSlot.pokemonId,
           );
           if (!pokemon) return null;
-          const availableMoves = await fetchMoves(saved.generation, pokemon.id);
+          const availableMoves = await fetchMoves(
+            saved.generation,
+            savedScope,
+            pokemon.id,
+          );
           const movesById = new Map(availableMoves.map((move) => [move.id, move]));
           return {
             pokemon,
@@ -335,14 +415,22 @@ export function TeamBuilderApp() {
           } satisfies TeamSlot;
         }),
       );
+      if (requestId !== requestEpoch.current) return;
       setGeneration(saved.generation);
+      setScope(savedScope);
       setCatalog(nextCatalog);
       setTeam(nextSlots.filter((slot): slot is TeamSlot => slot !== null));
       setTeamName(saved.name);
       setActiveSlot(null);
       setActiveSavedTeamId(saved._id);
+    } catch (error) {
+      if (requestId === requestEpoch.current) {
+        pendingLocalDraft.current = pendingBeforeLoad;
+        if (!catalog) setRetryKey((key) => key + 1);
+      }
+      throw error;
     } finally {
-      setLoadingCatalog(false);
+      if (requestId === requestEpoch.current) setLoadingCatalog(false);
     }
   }
 
@@ -384,6 +472,7 @@ export function TeamBuilderApp() {
           name={teamName}
           onNameChange={setTeamName}
           generation={generation}
+          scope={scope}
           team={team}
           activeSavedTeamId={activeSavedTeamId}
           onActiveSavedTeamIdChange={setActiveSavedTeamId}
@@ -404,6 +493,7 @@ export function TeamBuilderApp() {
           <WorkspaceLoader />
         ) : (
           <>
+            <ScopeSelector value={scope} onChange={changeScope} />
             <div className="mb-4 flex items-start gap-2 rounded-xl border border-black/[0.07] bg-white/45 px-3 py-2.5 text-[11px] leading-5 text-black/60">
               <Database className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               {catalog.scopeNote}
@@ -426,8 +516,9 @@ export function TeamBuilderApp() {
 
       <footer className="border-t border-black/10 px-5 py-8 text-center text-[10px] leading-5 text-black/35">
         Pokémon data derived from Pokémon Showdown under MIT-compatible data
-        tooling. Sprites served by Pokémon Showdown. Pokémon and all related
-        names are trademarks of Nintendo, Game Freak, and The Pokémon Company.
+        tooling. Sprites served by Pokémon Showdown with PokéAPI fallbacks.
+        Pokémon and all related names are trademarks of Nintendo, Game Freak,
+        and The Pokémon Company.
       </footer>
 
       <MobileTeamDock
@@ -439,12 +530,66 @@ export function TeamBuilderApp() {
       {activeSlot !== null && team[activeSlot] ? (
         <MovePicker
           generation={generation}
+          scope={scope}
           slot={team[activeSlot]}
           onChange={(moves) => setMoves(activeSlot, moves)}
           onClose={closeMovePicker}
         />
       ) : null}
     </div>
+  );
+}
+
+function ScopeSelector({
+  value,
+  onChange,
+}: {
+  value: CatalogScope;
+  onChange: (scope: CatalogScope) => void;
+}) {
+  return (
+    <section className="mb-3 flex flex-col gap-3 rounded-2xl border border-black/10 bg-white/65 p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="px-1">
+        <span className="text-[9px] font-black uppercase tracking-[0.12em] text-black/35">
+          Roster scope
+        </span>
+        <p className="mt-1 text-xs font-semibold text-black/60">
+          {value === "national"
+            ? "Every official species and mechanically distinct form introduced through this generation."
+            : "Only Pokémon usable in at least one core title from this generation."}
+        </p>
+      </div>
+      <div
+        role="radiogroup"
+        aria-label="Roster scope"
+        className="grid grid-cols-2 rounded-xl bg-black/[0.045] p-1"
+      >
+        {([
+          ["national", "All Pokémon"],
+          ["core", "Core games"],
+        ] as const).map(([scopeValue, label]) => (
+          <label
+            key={scopeValue}
+            className={`relative grid h-9 cursor-pointer place-items-center rounded-lg px-4 text-[10px] font-black uppercase tracking-[0.08em] transition focus-within:ring-2 focus-within:ring-[#ef5b4c]/60 ${
+              value === scopeValue
+                ? "bg-[#191816] text-white shadow-sm"
+                : "text-black/45 hover:bg-white/70 hover:text-black"
+            }`}
+          >
+            <input
+              type="radio"
+              name="roster-scope"
+              value={scopeValue}
+              checked={value === scopeValue}
+              onChange={() => onChange(scopeValue)}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            />
+            <span aria-hidden="true">{label}</span>
+            <span className="sr-only">{label}</span>
+          </label>
+        ))}
+      </div>
+    </section>
   );
 }
 

@@ -34,6 +34,7 @@ export function MobileTeamDock({
             >
               <PokemonImage
                 src={slot.pokemon.sprite}
+                fallbackSrcs={slot.pokemon.spriteFallbacks}
                 alt=""
                 className="h-10 w-10"
               />

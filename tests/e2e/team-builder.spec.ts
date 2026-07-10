@@ -7,6 +7,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("builds a team, chooses a legal move, analyzes it, and restores the draft", async ({
+  isMobile,
   page,
 }) => {
   await expect(
@@ -28,7 +29,8 @@ test("builds a team, chooses a legal move, analyzes it, and restores the draft",
   const mobileMoveButton = page.getByRole("button", {
     name: "Edit Pikachu moves",
   });
-  if (await mobileMoveButton.isVisible()) {
+  if (isMobile) {
+    await expect(mobileMoveButton).toBeVisible();
     await mobileMoveButton.click({ force: true });
   } else {
     await page.getByRole("button", { name: /Choose legal moves/i }).click();
@@ -84,6 +86,70 @@ test("searches the full catalog and clears incompatible state when changing gene
   await expect(page.getByText("0/6 on team")).toBeVisible({ timeout: 20_000 });
 });
 
+test("switches and restores roster scope with core-title representatives", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: /Gen VIII Galar/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Choose your Pokémon/i }),
+  ).toBeVisible({ timeout: 20_000 });
+
+  const scopeSelector = page.getByRole("radiogroup", { name: "Roster scope" });
+  const allPokemon = scopeSelector.getByRole("radio", {
+    name: "All Pokémon",
+  });
+  const coreGames = scopeSelector.getByRole("radio", { name: "Core games" });
+  const pokemonSearch = page.getByPlaceholder("Search name or #...");
+
+  await expect(allPokemon).toBeChecked();
+  await pokemonSearch.fill("Snivy");
+  await expect(
+    page.getByRole("button", { name: "Add Snivy to team" }),
+  ).toBeVisible();
+  await pokemonSearch.fill("Unown");
+  await page
+    .getByRole("button", { name: "Add Unown to team" })
+    .click({ force: true });
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await coreGames.click();
+  await expect(coreGames).toBeChecked();
+  await expect(page.getByText("0/6 on team")).toBeVisible({ timeout: 20_000 });
+
+  await pokemonSearch.fill("Snivy");
+  await expect(
+    page.getByRole("button", { name: "Add Snivy to team" }),
+  ).toHaveCount(0);
+  await pokemonSearch.fill("Unown");
+  await expect(
+    page.getByRole("button", { name: "Add Unown to team" }),
+  ).toBeVisible();
+  await pokemonSearch.fill("Ursaluna");
+  await expect(
+    page.getByRole("button", { name: "Add Ursaluna to team" }),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: /Choose your Pokémon/i }),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page
+      .getByRole("radiogroup", { name: "Roster scope" })
+      .getByRole("radio", { name: "Core games" }),
+  ).toBeChecked();
+
+  await page.getByRole("button", { name: /Gen VIII/i }).click();
+  await page.getByRole("button", { name: /Gen IX Paldea/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Choose your Pokémon/i }),
+  ).toBeVisible({ timeout: 20_000 });
+  await page.getByPlaceholder("Search name or #...").fill("Raichu Mega X");
+  await expect(
+    page.getByRole("button", { name: "Add Raichu-Mega-X to team" }),
+  ).toBeVisible();
+});
+
 test("signs in and round-trips a team through cloud sync", async ({
   isMobile,
   page,
@@ -129,7 +195,7 @@ test("signs in and round-trips a team through cloud sync", async ({
 
     await page.reload();
     await expect(savedTeams).toBeEnabled({ timeout: 20_000 });
-    await savedTeams.selectOption({ label: `${teamName} · Gen 1` });
+    await savedTeams.selectOption({ label: `${teamName} · Gen 1 · All` });
     await expect(deleteSavedTeam).toBeVisible({ timeout: 20_000 });
     await expect(
       page.getByText("Bulbasaur", { exact: true }).last(),
@@ -142,7 +208,9 @@ test("signs in and round-trips a team through cloud sync", async ({
         .catch(() => undefined);
       if (await savedOption.count()) {
         if (!(await deleteSavedTeam.isVisible())) {
-          await savedTeams.selectOption({ label: `${teamName} · Gen 1` });
+          await savedTeams.selectOption({
+            label: `${teamName} · Gen 1 · All`,
+          });
           await deleteSavedTeam.waitFor({ state: "visible", timeout: 20_000 });
         }
         page.once("dialog", (dialog) => dialog.accept());

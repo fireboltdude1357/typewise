@@ -13,6 +13,11 @@ export const generationValidator = v.union(
   v.literal(9),
 );
 
+export const catalogScopeValidator = v.union(
+  v.literal("national"),
+  v.literal("core"),
+);
+
 export const moveValidator = v.object({
   moveId: v.string(),
   moveName: v.string(),
@@ -29,6 +34,7 @@ export default defineSchema({
     ownerId: v.string(),
     name: v.string(),
     generation: generationValidator,
+    scope: v.optional(catalogScopeValidator),
     slots: v.array(teamSlotValidator),
     createdAt: v.number(),
     updatedAt: v.number(),

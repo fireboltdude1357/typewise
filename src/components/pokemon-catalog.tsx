@@ -176,6 +176,7 @@ export function PokemonCatalog({
 
                   <PokemonImage
                     src={pokemon.sprite}
+                    fallbackSrcs={pokemon.spriteFallbacks}
                     alt={pokemon.name}
                     className="mx-auto mt-1 h-20 w-full transition duration-200 group-hover:scale-105 sm:h-24"
                   />

@@ -21,13 +21,14 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import type { Generation, TeamSlot } from "@/lib/pokemon/types";
+import type { CatalogScope, Generation, TeamSlot } from "@/lib/pokemon/types";
 import { useBackendStatus } from "./providers";
 
 export type SavedTeamDocument = {
   _id: Id<"savedTeams">;
   name: string;
   generation: Generation;
+  scope?: CatalogScope;
   slots: Array<{
     pokemonId: string;
     pokemonName: string;
@@ -39,6 +40,7 @@ export function TeamToolbar({
   name,
   onNameChange,
   generation,
+  scope,
   team,
   activeSavedTeamId,
   onActiveSavedTeamIdChange,
@@ -48,6 +50,7 @@ export function TeamToolbar({
   name: string;
   onNameChange: (name: string) => void;
   generation: Generation;
+  scope: CatalogScope;
   team: TeamSlot[];
   activeSavedTeamId: Id<"savedTeams"> | null;
   onActiveSavedTeamIdChange: (id: Id<"savedTeams"> | null) => void;
@@ -73,6 +76,7 @@ export function TeamToolbar({
         <ConfiguredCloudControls
           name={name}
           generation={generation}
+          scope={scope}
           team={team}
           activeSavedTeamId={activeSavedTeamId}
           onActiveSavedTeamIdChange={onActiveSavedTeamIdChange}
@@ -92,6 +96,7 @@ export function TeamToolbar({
 function ConfiguredCloudControls(props: {
   name: string;
   generation: Generation;
+  scope: CatalogScope;
   team: TeamSlot[];
   activeSavedTeamId: Id<"savedTeams"> | null;
   onActiveSavedTeamIdChange: (id: Id<"savedTeams"> | null) => void;
@@ -137,6 +142,7 @@ function ConfiguredCloudControls(props: {
 function SavedTeamControls({
   name,
   generation,
+  scope,
   team,
   activeSavedTeamId,
   onActiveSavedTeamIdChange,
@@ -145,6 +151,7 @@ function SavedTeamControls({
 }: {
   name: string;
   generation: Generation;
+  scope: CatalogScope;
   team: TeamSlot[];
   activeSavedTeamId: Id<"savedTeams"> | null;
   onActiveSavedTeamIdChange: (id: Id<"savedTeams"> | null) => void;
@@ -178,12 +185,14 @@ function SavedTeamControls({
           teamId: activeSavedTeamId,
           name: name.trim() || "Untitled team",
           generation,
+          scope,
           slots: compactSlots,
         });
       } else {
         const id = await createTeam({
           name: name.trim() || "Untitled team",
           generation,
+          scope,
           slots: compactSlots,
         });
         onActiveSavedTeamIdChange(id);
@@ -208,8 +217,7 @@ function SavedTeamControls({
     setBusy("load");
     setError(null);
     try {
-      await onLoad(selected as SavedTeamDocument);
-      onActiveSavedTeamIdChange(selected._id);
+      await onLoad(selected);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Load failed.");
     } finally {
@@ -251,7 +259,8 @@ function SavedTeamControls({
           <option value="">New local draft</option>
           {savedTeams?.map((savedTeam) => (
             <option key={savedTeam._id} value={savedTeam._id}>
-              {savedTeam.name} · Gen {savedTeam.generation}
+              {savedTeam.name} · Gen {savedTeam.generation} ·{" "}
+              {savedTeam.scope === "core" ? "Core" : "All"}
             </option>
           ))}
         </select>

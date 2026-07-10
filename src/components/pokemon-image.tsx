@@ -8,16 +8,22 @@ import { cn } from "@/lib/utils";
 
 export function PokemonImage({
   src,
+  fallbackSrcs = [],
   alt,
   className,
 }: {
   src: string;
+  fallbackSrcs?: readonly string[];
   alt: string;
   className?: string;
 }) {
-  const [failed, setFailed] = useState(false);
+  const [failedSources, setFailedSources] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const sources = [...new Set([src, ...fallbackSrcs])];
+  const currentSource = sources.find((source) => !failedSources.has(source));
 
-  if (failed) {
+  if (!currentSource) {
     return (
       <span
         aria-label={`${alt} image unavailable`}
@@ -35,11 +41,17 @@ export function PokemonImage({
   // dimensions that vary per form, so a native image is the right fit here.
   return (
     <img
-      src={src}
+      src={currentSource}
       alt={alt}
       loading="lazy"
       decoding="async"
-      onError={() => setFailed(true)}
+      onError={() =>
+        setFailedSources((previous) => {
+          const next = new Set(previous);
+          next.add(currentSource);
+          return next;
+        })
+      }
       className={cn("object-contain [image-rendering:auto]", className)}
     />
   );

@@ -648,6 +648,38 @@ describe("analyzeTeam", () => {
     expect(result.breakers.defensiveTypeCombinations).toEqual([]);
   });
 
+  it("accepts historical typeless status and type-independent moves", () => {
+    const result = analyzeTeam(
+      [
+        pokemon("legacy-user", "Legacy User", ["Ghost"], [
+          {
+            id: "bide",
+            name: "Bide",
+            type: "???",
+            category: "physical",
+            power: null,
+            matchupMode: "type-independent",
+          },
+          {
+            id: "curse",
+            name: "Curse",
+            type: "???",
+            category: "status",
+            power: null,
+            matchupMode: "type-independent",
+          },
+        ]),
+      ],
+      mechanicsChart,
+    );
+
+    expect(result.offense.damagingMoveTypes).toEqual([]);
+    expect(result.gaps.movesets.byMember[0]).toMatchObject({
+      damagingMoveCount: 1,
+      statusMoveCount: 1,
+    });
+  });
+
   it("ranks and explains attacking and defensive breaker archetypes", () => {
     const result = analyzeTeam([
       pokemon("gyarados", "Gyarados", ["Water", "Flying"], [

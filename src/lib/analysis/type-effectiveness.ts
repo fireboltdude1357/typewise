@@ -107,6 +107,8 @@ export function assertValidAnalysisInput(
     moves: readonly {
       name: string;
       type: PokemonType;
+      category: SelectedMove["category"];
+      matchupMode?: SelectedMove["matchupMode"];
       secondaryEffectivenessType?: PokemonType;
       effectivenessOverrides?: Readonly<Record<string, number>>;
     }[];
@@ -149,7 +151,10 @@ export function assertValidAnalysisInput(
       }
     }
     for (const move of member.moves) {
-      if (!knownTypes.has(move.type)) {
+      const usesPrimaryType =
+        move.category !== "status" &&
+        (move.matchupMode ?? "standard") !== "type-independent";
+      if (usesPrimaryType && !knownTypes.has(move.type)) {
         throw new Error(
           `Unknown move type \"${move.type}\" on ${move.name} for generation ${chart.generation}.`,
         );
