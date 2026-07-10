@@ -5,6 +5,10 @@ search an illustrated legal Pokédex, assign up to four learnable moves to each
 of six team members, and get an explainable report of defensive pressure,
 offensive blind spots, moveset gaps, and likely breaker archetypes.
 
+**Live:** [typewise-indol.vercel.app](https://typewise-indol.vercel.app)
+
+**Source:** [github.com/fireboltdude1357/typewise](https://github.com/fireboltdude1357/typewise)
+
 ## Product behavior
 
 - Generation-first flow covering Generations I–IX.
@@ -75,8 +79,9 @@ configuration is absent. Cloud controls appear once both public values exist.
 | `CLERK_SECRET_KEY` | local + Vercel | Clerk server key/middleware |
 | `CLERK_JWT_ISSUER_DOMAIN` | Convex | Clerk issuer used to validate JWTs |
 
-In Clerk, enable the Convex integration/JWT template. Then configure the issuer
-on each Convex deployment and push the auth configuration:
+In Clerk, activate the Convex integration so session tokens receive the
+required `aud: "convex"` claim. Then configure the issuer on each Convex
+deployment and push the auth configuration:
 
 ```bash
 npx convex env set CLERK_JWT_ISSUER_DOMAIN https://your-app.clerk.accounts.dev
@@ -99,7 +104,11 @@ npm run check         # lint + types + units + build
 
 The E2E suite covers generation onboarding, full-catalog search, team creation,
 move selection, live analysis, local-draft reload, and generation cleanup on
-desktop and mobile.
+desktop and mobile. Set `PLAYWRIGHT_BASE_URL` to test an existing deployment.
+The credential-gated cloud test additionally signs in and proves the Convex
+save/reload/delete round trip when `E2E_CLERK_EMAIL` and
+`E2E_CLERK_PASSWORD` are provided. Use a disposable, least-privileged test
+account; browser traces are disabled whenever those credentials are present.
 
 ## Deployment
 
@@ -117,6 +126,12 @@ vercel deploy --prod
 Production is complete only after the Convex production issuer is set, Clerk's
 allowed origins/redirects include the Vercel domain, and an authenticated
 save/reload/delete smoke test passes at the live URL.
+
+The Vercel production deployment and Convex production backend are live, and
+the authenticated cloud round trip has been verified. The current Vercel site
+uses Clerk's development instance. Promoting Clerk itself to production still
+requires a user-owned custom domain and DNS configuration; once available, run
+`clerk deploy`, replace the Vercel Clerk keys, and update the Convex issuer.
 
 ## Analysis limits
 

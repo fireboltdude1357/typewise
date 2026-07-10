@@ -1,5 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+const hasClerkTestCredentials = Boolean(
+  process.env.E2E_CLERK_EMAIL || process.env.E2E_CLERK_PASSWORD,
+);
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -7,19 +12,21 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL,
     channel: process.env.PLAYWRIGHT_USE_SYSTEM_CHROME ? "chrome" : undefined,
-    trace: "on-first-retry",
+    trace: hasClerkTestCredentials ? "off" : "on-first-retry",
     screenshot: "only-on-failure",
   },
   projects: [
     { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "mobile-chromium", use: { ...devices["Pixel 7"] } },
   ],
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: "npm run dev",
+        url: baseURL,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+      },
 });
