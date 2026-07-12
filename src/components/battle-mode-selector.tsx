@@ -1,0 +1,7 @@
+"use client";
+import type { BattleFormat } from "@/lib/pokemon/types";
+
+export function BattleModeSelector({ value, onChange }: { value: BattleFormat; onChange: (value: BattleFormat) => void }) {
+  const options: Array<[BattleFormat, string, string]> = [["casual", "Type audit", "Types and selected moves"], ["singles", "Singles", "Roles, threats, and switches"], ["doubles", "Doubles", "Positioning and Protect checks"]];
+  return <section className="mb-3 rounded-2xl border border-black/10 bg-white/65 p-3"><div className="px-1"><span className="text-[9px] font-black uppercase tracking-[0.12em] text-black/35">Analysis mode</span><p className="mt-1 text-xs font-semibold text-black/60">Choose the battle context before interpreting the lineup.</p></div><div role="radiogroup" aria-label="Analysis mode" className="mt-3 grid gap-1 rounded-xl bg-black/[0.045] p-1 sm:grid-cols-3">{options.map(([id, label, note]) => <label key={id} className={`relative cursor-pointer rounded-lg px-3 py-2.5 transition focus-within:ring-2 focus-within:ring-[#ef5b4c]/60 ${value === id ? "bg-[#191816] text-white shadow-sm" : "text-black/45 hover:bg-white/70"}`}><input type="radio" name="battle-mode" checked={value === id} onChange={() => onChange(id)} className="absolute inset-0 h-full w-full opacity-0"/><span className="block text-[10px] font-black uppercase tracking-[0.08em]">{label}</span><span className={`mt-0.5 block text-[9px] ${value === id ? "text-white/45" : "text-black/35"}`}>{note}</span></label>)}</div></section>;
+}

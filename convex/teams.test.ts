@@ -60,7 +60,18 @@ describe("saved team authorization and validation", () => {
 
     expect(await user.query(api.teams.get, { teamId })).toMatchObject({
       scope: "national",
+      format: "casual",
     });
+  });
+
+  it("round-trips competitive mode and set configuration", async () => {
+    const t = convexTest(schema, modules);
+    const user = t.withIdentity({ subject: "user_competitive", issuer: "test" });
+    const competitiveSet = { ability: "Static", item: "Choice Scarf", nature: "Timid" as const, evPreset: "fast-special" as const };
+    const teamId = await user.mutation(api.teams.create, { ...validTeam, format: "singles", slots: [{ ...validTeam.slots[0], competitiveSet }] });
+    expect(await user.query(api.teams.get, { teamId })).toMatchObject({ format: "singles", slots: [{ competitiveSet }] });
+    await user.mutation(api.teams.update, { teamId, format: "doubles", slots: [{ ...validTeam.slots[0], competitiveSet: { ...competitiveSet, item: "Sitrus Berry" } }] });
+    expect(await user.query(api.teams.get, { teamId })).toMatchObject({ format: "doubles", slots: [{ competitiveSet: { item: "Sitrus Berry" } }] });
   });
 
   it("canonicalizes IDs and rejects duplicate forms or move variants", async () => {

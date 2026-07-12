@@ -2,7 +2,7 @@
 
 import { ChevronRight, Plus, Sparkles, Trash2 } from "lucide-react";
 
-import type { TeamSlot } from "@/lib/pokemon/types";
+import type { CompetitiveSet, EvPreset, Nature, TeamSlot } from "@/lib/pokemon/types";
 import { cn } from "@/lib/utils";
 import { PokemonImage } from "./pokemon-image";
 import { TypePill } from "./type-pill";
@@ -11,10 +11,14 @@ export function TeamPanel({
   team,
   onEditMoves,
   onRemove,
+  competitive = false,
+  onCompetitiveSetChange,
 }: {
   team: TeamSlot[];
   onEditMoves: (index: number) => void;
   onRemove: (index: number) => void;
+  competitive?: boolean;
+  onCompetitiveSetChange?: (index: number, set: CompetitiveSet) => void;
 }) {
   return (
     <aside
@@ -111,6 +115,7 @@ export function TeamPanel({
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-white/35" />
               </button>
+              {competitive && onCompetitiveSetChange ? <SetControls slot={slot} onChange={(set) => onCompetitiveSetChange(index, set)} /> : null}
             </article>
           );
         })}
@@ -122,6 +127,15 @@ export function TeamPanel({
       </div>
     </aside>
   );
+}
+
+const ITEMS = ["Leftovers", "Heavy-Duty Boots", "Choice Scarf", "Choice Band", "Choice Specs", "Life Orb", "Focus Sash", "Assault Vest", "Rocky Helmet", "Sitrus Berry", "None"];
+const NATURES: Nature[] = ["Hardy", "Adamant", "Modest", "Jolly", "Timid", "Bold", "Calm", "Impish", "Careful"];
+const PRESETS: Array<[EvPreset, string]> = [["balanced", "Balanced"], ["fast-physical", "Fast physical"], ["fast-special", "Fast special"], ["physical", "Physical bulk"], ["special", "Special bulk"], ["bulky", "Mixed bulk"]];
+function SetControls({ slot, onChange }: { slot: TeamSlot; onChange: (set: CompetitiveSet) => void }) {
+  const value: CompetitiveSet = slot.competitiveSet ?? { ability: slot.pokemon.abilities[0] ?? "", item: "Leftovers", nature: "Hardy", evPreset: "balanced" };
+  const field = "h-8 min-w-0 rounded-lg border border-white/10 bg-black/25 px-2 text-[9px] text-white outline-none";
+  return <div className="mt-2 grid grid-cols-2 gap-1.5" aria-label={`${slot.pokemon.name} competitive set`}><select aria-label="Ability" value={value.ability} onChange={(e) => onChange({ ...value, ability: e.target.value })} className={field}>{slot.pokemon.abilities.map((ability) => <option key={ability}>{ability}</option>)}</select><select aria-label="Held item" value={value.item} onChange={(e) => onChange({ ...value, item: e.target.value })} className={field}>{ITEMS.map((item) => <option key={item}>{item}</option>)}</select><select aria-label="Nature" value={value.nature} onChange={(e) => onChange({ ...value, nature: e.target.value as Nature })} className={field}>{NATURES.map((nature) => <option key={nature}>{nature}</option>)}</select><select aria-label="EV preset" value={value.evPreset} onChange={(e) => onChange({ ...value, evPreset: e.target.value as EvPreset })} className={field}>{PRESETS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></div>;
 }
 
 function EmptySlot({ index }: { index: number }) {

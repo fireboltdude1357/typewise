@@ -9,6 +9,7 @@ import {
 } from "./_generated/server";
 import {
   catalogScopeValidator,
+  battleFormatValidator,
   generationValidator,
   teamSlotValidator,
 } from "./schema";
@@ -123,7 +124,7 @@ function normalizeSlots(slots: TeamSlot[]): TeamSlot[] {
       return { moveId, moveName };
     });
 
-    return { pokemonId, pokemonName, moves };
+    return { pokemonId, pokemonName, moves, ...(slot.competitiveSet ? { competitiveSet: { ...slot.competitiveSet, ability: normalizeRequiredString(slot.competitiveSet.ability, `Ability for ${pokemonName}`, MAX_DISPLAY_NAME_LENGTH), item: normalizeRequiredString(slot.competitiveSet.item, `Item for ${pokemonName}`, MAX_DISPLAY_NAME_LENGTH) } } : {}) };
   });
 }
 
@@ -167,6 +168,7 @@ export const create = mutation({
     name: v.string(),
     generation: generationValidator,
     scope: v.optional(catalogScopeValidator),
+    format: v.optional(battleFormatValidator),
     slots: v.array(teamSlotValidator),
   },
   handler: async (ctx, args) => {
@@ -187,6 +189,7 @@ export const create = mutation({
       name: normalizeTeamName(args.name),
       generation: args.generation,
       scope: args.scope ?? "national",
+      format: args.format ?? "casual",
       slots: normalizeSlots(args.slots),
       createdAt: now,
       updatedAt: now,
@@ -200,9 +203,10 @@ export const update = mutation({
     name: v.optional(v.string()),
     generation: v.optional(generationValidator),
     scope: v.optional(catalogScopeValidator),
+    format: v.optional(battleFormatValidator),
     slots: v.optional(v.array(teamSlotValidator)),
   },
-  handler: async (ctx, { teamId, name, generation, scope, slots }) => {
+  handler: async (ctx, { teamId, name, generation, scope, format, slots }) => {
     const ownerId = await requireUserId(ctx);
     const team = await getOwnedTeam(ctx, teamId, ownerId);
 
@@ -217,6 +221,7 @@ export const update = mutation({
       name === undefined &&
       generation === undefined &&
       scope === undefined &&
+      format === undefined &&
       slots === undefined
     ) {
       invalidArgument("Provide at least one team field to update.");
@@ -226,6 +231,7 @@ export const update = mutation({
       ...(name === undefined ? {} : { name: normalizeTeamName(name) }),
       ...(generation === undefined ? {} : { generation }),
       ...(scope === undefined ? {} : { scope }),
+      ...(format === undefined ? {} : { format }),
       ...(slots === undefined ? {} : { slots: normalizeSlots(slots) }),
       updatedAt: Date.now(),
     });

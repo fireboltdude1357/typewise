@@ -20,6 +20,9 @@ offensive blind spots, moveset gaps, and likely breaker archetypes.
 - Shared weakness and safe-switch counts for every attacking type.
 - Damaging-move-only offensive coverage and STAB gap detection.
 - Ranked offensive and defensive breaker archetypes with explanations.
+- Optional singles and doubles competitive audits with set configuration,
+  bundled tier context, inferred roles, coherence checks, STAB threat screens,
+  approximate Speed/damage, and explainable replacement directions.
 - Anonymous local drafts and Clerk-authenticated Convex cloud saves.
 - Responsive desktop/mobile UI, including a mobile quick-team dock.
 
@@ -183,9 +186,13 @@ configuration, and a matching Convex issuer.
 ## Analysis limits
 
 Typewise is a team-building aid, not a battle simulator. The current report is
-type and selected-move based. Abilities, held items, stats, EVs, natures,
-weather, Terastallization, move order, and format clauses can change real
-matchups; the UI states this beside every report.
+type and selected-move based by default. Competitive mode uses bundled
+generation-specific singles/doubles tiers, base stats, selected moves, ability,
+item, nature, and an EV intent preset. Its threat screen evaluates opposing STAB
+types rather than complete metagame sets, and its damage range uses a disclosed
+neutral benchmark. Weather, Terastallization, full IV/EV spreads, move order,
+coverage moves, live usage, and format clauses can still change real matchups;
+the UI states these assumptions beside every report.
 
 ## Data and trademarks
 
