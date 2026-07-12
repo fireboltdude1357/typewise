@@ -223,6 +223,10 @@ function pokemonSummary(
     spriteWidth: sprite.w,
     spriteHeight: sprite.h,
     baseStatTotal: species.bst,
+    baseStats: { ...species.baseStats },
+    abilities: [...new Set(Object.values(species.abilities).filter(Boolean))],
+    singlesTier: species.tier,
+    doublesTier: species.doublesTier,
   };
 }
 

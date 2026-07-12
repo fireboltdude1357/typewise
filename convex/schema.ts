@@ -17,6 +17,12 @@ export const catalogScopeValidator = v.union(
   v.literal("national"),
   v.literal("core"),
 );
+export const battleFormatValidator = v.union(v.literal("casual"), v.literal("singles"), v.literal("doubles"));
+export const competitiveSetValidator = v.object({
+  ability: v.string(), item: v.string(),
+  nature: v.union(v.literal("Hardy"), v.literal("Adamant"), v.literal("Modest"), v.literal("Jolly"), v.literal("Timid"), v.literal("Bold"), v.literal("Calm"), v.literal("Impish"), v.literal("Careful")),
+  evPreset: v.union(v.literal("balanced"), v.literal("physical"), v.literal("special"), v.literal("fast-physical"), v.literal("fast-special"), v.literal("bulky")),
+});
 
 export const moveValidator = v.object({
   moveId: v.string(),
@@ -27,6 +33,7 @@ export const teamSlotValidator = v.object({
   pokemonId: v.string(),
   pokemonName: v.string(),
   moves: v.array(moveValidator),
+  competitiveSet: v.optional(competitiveSetValidator),
 });
 
 export default defineSchema({
@@ -35,6 +42,7 @@ export default defineSchema({
     name: v.string(),
     generation: generationValidator,
     scope: v.optional(catalogScopeValidator),
+    format: v.optional(battleFormatValidator),
     slots: v.array(teamSlotValidator),
     createdAt: v.number(),
     updatedAt: v.number(),

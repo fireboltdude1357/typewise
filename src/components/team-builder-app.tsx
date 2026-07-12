@@ -13,6 +13,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
   CatalogScope,
+  BattleFormat,
+  CompetitiveSet,
   DexCatalogResponse,
   Generation,
   MoveListResponse,
@@ -22,6 +24,8 @@ import type {
 } from "@/lib/pokemon/types";
 import { isCatalogScope, isGeneration } from "@/lib/pokemon/types";
 import { AnalysisPanel } from "./analysis-panel";
+import { BattleModeSelector } from "./battle-mode-selector";
+import { CompetitivePanel } from "./competitive-panel";
 import { AppHeader } from "./app-header";
 import { GenerationGate } from "./generation-gate";
 import { MovePicker } from "./move-picker";
@@ -39,7 +43,8 @@ type LocalDraft = {
   generation: Generation;
   scope: CatalogScope;
   name: string;
-  slots: Array<{ pokemonId: string; moveIds: string[] }>;
+  format?: BattleFormat;
+  slots: Array<{ pokemonId: string; moveIds: string[]; competitiveSet?: CompetitiveSet }>;
 };
 
 async function fetchCatalog(
@@ -77,10 +82,10 @@ async function rehydrateDraftSlots(
   );
 
   const hydrated = await Promise.all(
-    slots.slice(0, 6).map(async (slot) => {
+    slots.slice(0, 6).map(async (slot): Promise<TeamSlot | null> => {
       const pokemon = pokemonById.get(slot.pokemonId);
       if (!pokemon) return null;
-      if (slot.moveIds.length === 0) return { pokemon, moves: [] } satisfies TeamSlot;
+      if (slot.moveIds.length === 0) return { pokemon, moves: [], competitiveSet: slot.competitiveSet } satisfies TeamSlot;
 
       const legalMoves = await fetchMoves(generation, scope, pokemon.id);
       const movesById = new Map(legalMoves.map((move) => [move.id, move]));
@@ -90,6 +95,7 @@ async function rehydrateDraftSlots(
           .map((moveId) => movesById.get(moveId))
           .filter((move): move is MoveSummary => move !== undefined)
           .slice(0, 4),
+        competitiveSet: slot.competitiveSet,
       } satisfies TeamSlot;
     }),
   );
@@ -101,6 +107,7 @@ export function TeamBuilderApp() {
   const [hydrated, setHydrated] = useState(false);
   const [generation, setGeneration] = useState<Generation | null>(null);
   const [scope, setScope] = useState<CatalogScope>("national");
+  const [format, setFormat] = useState<BattleFormat>("casual");
   const [catalog, setCatalog] = useState<DexCatalogResponse | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
@@ -138,6 +145,7 @@ export function TeamBuilderApp() {
                   moveIds: slot.moveIds.filter(
                     (moveId): moveId is string => typeof moveId === "string",
                   ),
+                  competitiveSet: slot.competitiveSet,
                 }))
             : Array.isArray(draft.team)
               ? draft.team
@@ -165,10 +173,15 @@ export function TeamBuilderApp() {
                 ? draft.name.slice(0, 80)
                 : "Untitled team",
             slots: compactSlots.slice(0, 6),
+            format:
+              draft.format === "singles" || draft.format === "doubles"
+                ? draft.format
+                : "casual",
           };
           setGeneration(draft.generation);
           setScope(pendingLocalDraft.current.scope);
           setTeamName(pendingLocalDraft.current.name);
+          setFormat(pendingLocalDraft.current.format ?? "casual");
         }
       }
     } catch {
@@ -187,9 +200,11 @@ export function TeamBuilderApp() {
       generation,
       scope,
       name: teamName,
+      format,
       slots: team.map((slot) => ({
         pokemonId: slot.pokemon.id,
         moveIds: slot.moves.map((move) => move.id),
+        competitiveSet: slot.competitiveSet,
       })),
     };
     try {
@@ -197,7 +212,7 @@ export function TeamBuilderApp() {
     } catch {
       // A private browser profile or full storage quota should not break the app.
     }
-  }, [activeSavedTeamId, generation, hydrated, scope, team, teamName]);
+  }, [activeSavedTeamId, format, generation, hydrated, scope, team, teamName]);
 
   useEffect(() => {
     if (generation === null) return;
@@ -382,6 +397,10 @@ export function TeamBuilderApp() {
     );
   }
 
+  function setCompetitiveSet(index: number, competitiveSet: CompetitiveSet) {
+    setTeam((currentTeam) => currentTeam.map((slot, slotIndex) => slotIndex === index ? { ...slot, competitiveSet } : slot));
+  }
+
   async function loadSavedTeam(saved: SavedTeamDocument) {
     const requestId = ++requestEpoch.current;
     const pendingBeforeLoad = pendingLocalDraft.current;
@@ -395,7 +414,7 @@ export function TeamBuilderApp() {
           ? catalog
           : await fetchCatalog(saved.generation, savedScope);
       const nextSlots = await Promise.all(
-        saved.slots.slice(0, 6).map(async (compactSlot) => {
+        saved.slots.slice(0, 6).map(async (compactSlot): Promise<TeamSlot | null> => {
           const pokemon = nextCatalog.pokemon.find(
             (candidate) => candidate.id === compactSlot.pokemonId,
           );
@@ -412,12 +431,14 @@ export function TeamBuilderApp() {
               .map((move) => movesById.get(move.moveId))
               .filter((move): move is MoveSummary => move !== undefined)
               .slice(0, 4),
+            competitiveSet: compactSlot.competitiveSet,
           } satisfies TeamSlot;
         }),
       );
       if (requestId !== requestEpoch.current) return;
       setGeneration(saved.generation);
       setScope(savedScope);
+      setFormat(saved.format ?? "casual");
       setCatalog(nextCatalog);
       setTeam(nextSlots.filter((slot): slot is TeamSlot => slot !== null));
       setTeamName(saved.name);
@@ -473,6 +494,7 @@ export function TeamBuilderApp() {
           onNameChange={setTeamName}
           generation={generation}
           scope={scope}
+          format={format}
           team={team}
           activeSavedTeamId={activeSavedTeamId}
           onActiveSavedTeamIdChange={setActiveSavedTeamId}
@@ -494,6 +516,7 @@ export function TeamBuilderApp() {
         ) : (
           <>
             <ScopeSelector value={scope} onChange={changeScope} />
+            <BattleModeSelector value={format} onChange={setFormat} />
             <div className="mb-4 flex items-start gap-2 rounded-xl border border-black/[0.07] bg-white/45 px-3 py-2.5 text-[11px] leading-5 text-black/60">
               <Database className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               {catalog.scopeNote}
@@ -504,11 +527,14 @@ export function TeamBuilderApp() {
                 team={team}
                 onEditMoves={setActiveSlot}
                 onRemove={removePokemon}
+                competitive={format !== "casual"}
+                onCompetitiveSetChange={setCompetitiveSet}
               />
             </div>
 
             <div className="mt-6">
               <AnalysisPanel catalog={catalog} team={team} />
+              {format !== "casual" ? <div className="mt-6"><CompetitivePanel catalog={catalog} team={team} format={format} /></div> : null}
             </div>
           </>
         )}

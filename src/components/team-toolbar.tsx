@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import type { CatalogScope, Generation, TeamSlot } from "@/lib/pokemon/types";
+import type { BattleFormat, CatalogScope, CompetitiveSet, Generation, TeamSlot } from "@/lib/pokemon/types";
 import { useBackendStatus } from "./providers";
 
 export type SavedTeamDocument = {
@@ -29,10 +29,12 @@ export type SavedTeamDocument = {
   name: string;
   generation: Generation;
   scope?: CatalogScope;
+  format?: BattleFormat;
   slots: Array<{
     pokemonId: string;
     pokemonName: string;
     moves: Array<{ moveId: string; moveName: string }>;
+    competitiveSet?: CompetitiveSet;
   }>;
 };
 
@@ -41,6 +43,7 @@ export function TeamToolbar({
   onNameChange,
   generation,
   scope,
+  format,
   team,
   activeSavedTeamId,
   onActiveSavedTeamIdChange,
@@ -51,6 +54,7 @@ export function TeamToolbar({
   onNameChange: (name: string) => void;
   generation: Generation;
   scope: CatalogScope;
+  format: BattleFormat;
   team: TeamSlot[];
   activeSavedTeamId: Id<"savedTeams"> | null;
   onActiveSavedTeamIdChange: (id: Id<"savedTeams"> | null) => void;
@@ -77,6 +81,7 @@ export function TeamToolbar({
           name={name}
           generation={generation}
           scope={scope}
+          format={format}
           team={team}
           activeSavedTeamId={activeSavedTeamId}
           onActiveSavedTeamIdChange={onActiveSavedTeamIdChange}
@@ -97,6 +102,7 @@ function ConfiguredCloudControls(props: {
   name: string;
   generation: Generation;
   scope: CatalogScope;
+  format: BattleFormat;
   team: TeamSlot[];
   activeSavedTeamId: Id<"savedTeams"> | null;
   onActiveSavedTeamIdChange: (id: Id<"savedTeams"> | null) => void;
@@ -143,6 +149,7 @@ function SavedTeamControls({
   name,
   generation,
   scope,
+  format,
   team,
   activeSavedTeamId,
   onActiveSavedTeamIdChange,
@@ -152,6 +159,7 @@ function SavedTeamControls({
   name: string;
   generation: Generation;
   scope: CatalogScope;
+  format: BattleFormat;
   team: TeamSlot[];
   activeSavedTeamId: Id<"savedTeams"> | null;
   onActiveSavedTeamIdChange: (id: Id<"savedTeams"> | null) => void;
@@ -173,6 +181,7 @@ function SavedTeamControls({
       moveId: move.id,
       moveName: move.name,
     })),
+    competitiveSet: slot.competitiveSet,
   }));
 
   async function saveTeam() {
@@ -186,6 +195,7 @@ function SavedTeamControls({
           name: name.trim() || "Untitled team",
           generation,
           scope,
+          format,
           slots: compactSlots,
         });
       } else {
@@ -193,6 +203,7 @@ function SavedTeamControls({
           name: name.trim() || "Untitled team",
           generation,
           scope,
+          format,
           slots: compactSlots,
         });
         onActiveSavedTeamIdChange(id);

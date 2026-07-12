@@ -24,6 +24,38 @@ export type PokemonSummary = {
   spriteWidth: number;
   spriteHeight: number;
   baseStatTotal: number;
+  baseStats: {
+    hp: number;
+    atk: number;
+    def: number;
+    spa: number;
+    spd: number;
+    spe: number;
+  };
+  abilities: string[];
+  singlesTier: string;
+  doublesTier: string;
+};
+
+export const BATTLE_FORMATS = ["casual", "singles", "doubles"] as const;
+export type BattleFormat = (typeof BATTLE_FORMATS)[number];
+export type Nature =
+  | "Hardy"
+  | "Adamant"
+  | "Modest"
+  | "Jolly"
+  | "Timid"
+  | "Bold"
+  | "Calm"
+  | "Impish"
+  | "Careful";
+export type EvPreset = "balanced" | "physical" | "special" | "fast-physical" | "fast-special" | "bulky";
+
+export type CompetitiveSet = {
+  ability: string;
+  item: string;
+  nature: Nature;
+  evPreset: EvPreset;
 };
 
 export type LearnMethod =
@@ -80,6 +112,7 @@ export type MoveListResponse = {
 export type TeamSlot = {
   pokemon: PokemonSummary;
   moves: MoveSummary[];
+  competitiveSet?: CompetitiveSet;
 };
 
 export type StoredTeam = {
@@ -95,4 +128,8 @@ export function isGeneration(value: number): value is Generation {
 
 export function isCatalogScope(value: string): value is CatalogScope {
   return CATALOG_SCOPES.includes(value as CatalogScope);
+}
+
+export function isBattleFormat(value: string): value is BattleFormat {
+  return BATTLE_FORMATS.includes(value as BattleFormat);
 }
